@@ -16,5 +16,7 @@
         android:layout_height="wrap_content"
         android:id="@+id/btnJogar"
         android:layout_centerVertical="true"
-        android:layout_centerHorizontal="true" />
+        android:layout_centerHorizontal="true"
+        style="@android:style/Widget.Button"
+        android:elevation="12dp" />
 </RelativeLayout>

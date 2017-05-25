@@ -6,28 +6,28 @@ import android.widget.*;
 import android.content.*;
 import android.hardware.*;
 
-public class SensorActivity extends Activity implements SensorEventListener {
+public class GameActivity extends Activity implements SensorEventListener {
+
+    private sGame content;
 
     private SensorManager mSensorManager;
 
-    private final float[] mAccelerometerReading = new float[3];
     private final float[] mMagnetometerReading = new float[3];
+    private final float[] mAccelerometerReading = new float[3];
 
     private final float[] mRotationMatrix = new float[9];
     private final float[] mOrientationAngles = new float[3];
 
-    private TextView txtRotation;
-
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_game);
+
+        this.content = new sGame(this, null);
+        setContentView(this.content);
 
         getWindow().getDecorView().setSystemUiVisibility(StartActivity.UI_OPTIONS);
 
         this.mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-
-        this.txtRotation = (TextView) findViewById(R.id.txtRotation);
     }
 
     @Override
@@ -60,13 +60,6 @@ public class SensorActivity extends Activity implements SensorEventListener {
             System.arraycopy(event.values, 0, this.mMagnetometerReading, 0, this.mMagnetometerReading.length);
 
         updateOrientationAngles();
-
-        StringBuffer strBuffer = new StringBuffer();
-
-        for (float v : this.mOrientationAngles)
-            strBuffer.append(String.format("%.3f ", v));
-
-        this.txtRotation.setText(strBuffer.toString());
     }
 
     public void updateOrientationAngles() {

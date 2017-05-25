@@ -21,9 +21,7 @@ public class StartActivity extends AppCompatActivity {
         btnJogar.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent in = new Intent(StartActivity.this, SensorActivity.class);
-
-                startActivity(in);
+                startActivity(new Intent(StartActivity.this, GameActivity.class));
             }
         });
     }
