@@ -2,6 +2,7 @@
   <dictionary name="lucas">
     <words>
       <w>coords</w>
+      <w>rects</w>
       <w>tscale</w>
     </words>
   </dictionary>

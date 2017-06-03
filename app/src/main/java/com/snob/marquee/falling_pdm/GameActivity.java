@@ -15,13 +15,17 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
     private String debugStr;
 
     private final float SPEED = 20;
-    private final float PLAYER_SCALE = 0.065f;
+    private final float PLAYER_SCALE = 0.025f;
 
     private final long SENSOR_RATE = 20;
     private final long TIMER_PERIOD = 60;
 
-    private final float RECT_INC_RATE = 0.01f;
-    private final float RECT_MAX_SCALE = 0.90f;
+    private final float RECT_INC_RATE = 0.03f;
+    private final float RECT_MAX_SCALE = 0.80f;
+
+    private final int MAX_HOLES = 5;
+
+    private Random numberGen;
 
     private Point size;
     private Player player;
@@ -43,6 +47,11 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
     private float[] offSetX;
     private float[] offSetY;
+
+    private int rowsNum;
+    private int numHoles;
+    private ArrayList<Float> holes;
+    private boolean[][] floorMatrix;
 
     private class Player {
         public float scale;
@@ -88,6 +97,8 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         this.size = new Point();
         this.offSetX = new float[2];
         this.offSetY = new float[2];
+        this.numberGen = new Random();
+        this.holes = new ArrayList<>();
         this.accelerations = new float[2];
         this.lastUpdateTime = System.currentTimeMillis();
 
@@ -100,6 +111,10 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         this.maxRectPoints = calcRectPoints(RECT_MAX_SCALE);
 
         this.realRadius = this.size.x * PLAYER_SCALE;
+
+        this.rowsNum = Math.round(RECT_MAX_SCALE * this.size.y / 3 / this.realRadius);
+        this.floorMatrix = new boolean[this.rowsNum][this.rowsNum];
+        raffleMatrix();
 
         this.offSetX[0] = this.maxRectPoints[0] + this.realRadius;
         this.offSetX[1] = this.maxRectPoints[2] - this.realRadius;
@@ -134,9 +149,14 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
                 mov = player.speed * accelerations[0];
                 player.movY(mov);
 
-                rectScale += RECT_INC_RATE;
-                if (rectScale >= RECT_MAX_SCALE)
-                    rectScale = 0;
+                synchronized (floorMatrix) {
+                    rectScale += RECT_INC_RATE;
+
+                    if (rectScale >= RECT_MAX_SCALE) {
+                        rectScale = 0;
+                        raffleMatrix();
+                    }
+                }
 
                 handler.sendEmptyMessage(0);
             }
@@ -177,6 +197,46 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         return ret;
     }
 
+    public void raffleMatrix() {
+        this.floorMatrix = new boolean[this.rowsNum][this.rowsNum];
+
+        this.numHoles = 1 + this.numberGen.nextInt(MAX_HOLES);
+
+        for (int c = 0; c < this.numHoles; c++) {
+            int i = this.numberGen.nextInt(this.rowsNum);
+            int j = this.numberGen.nextInt(this.rowsNum);
+
+            this.floorMatrix[i][j] = true;
+        }
+    }
+
+    public void createRects(float x, float y) {
+        this.holes.clear();
+
+        float holesW, holesH, a, b;
+        int added = 0;
+
+        synchronized (this.floorMatrix) {
+            for (int i = 0; i < this.rowsNum; i++)
+                for (int j = 0; j < this.rowsNum; j++)
+                    if (this.floorMatrix[i][j]) {
+                        holesW = this.size.x * this.rectScale / this.rowsNum;
+                        holesH = this.size.y * this.rectScale / this.rowsNum;
+
+                        a = x + i * holesW;
+                        b = y + j * holesH;
+
+                        this.holes.add(a);
+                        this.holes.add(b);
+                        this.holes.add(a + holesW);
+                        this.holes.add(b + holesH);
+
+                        if (this.numHoles == ++added)
+                            return;
+                    }
+        }
+    }
+
     private class GameView extends View {
 
         private Paint pen;
@@ -196,8 +256,14 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
             //screen.drawText(debugStr, size.x / 2, size.y / 2, this.pen);
 
             this.pen.setARGB(255, 0, 0, 0);
-            float[] coords = calcRectPoints(rectScale);
-            screen.drawRect(coords[0], coords[1], coords[2], coords[3], this.pen);
+            float[] floor = calcRectPoints(rectScale);
+            screen.drawRect(floor[0], floor[1], floor[2], floor[3], this.pen);
+
+            this.pen.setARGB(255, 255, 255, 255);
+
+            createRects(floor[0], floor[1]);
+            for (int c = 0; c < holes.size(); c += 4)
+                screen.drawRect(holes.get(c), holes.get(c + 1), holes.get(c + 2), holes.get(c + 3), this.pen);
 
             this.pen.setARGB(255, 0, 0, 255);
             screen.drawCircle(player.pos[0], player.pos[1], realRadius, this.pen);
