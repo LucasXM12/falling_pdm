@@ -60,6 +60,7 @@ public class GameActivity extends Activity implements SensorEventListener {
             System.arraycopy(event.values, 0, this.mMagnetometerReading, 0, this.mMagnetometerReading.length);
 
         updateOrientationAngles();
+        this.content.setAngles(this.mOrientationAngles);
     }
 
     public void updateOrientationAngles() {
