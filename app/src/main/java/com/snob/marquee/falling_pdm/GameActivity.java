@@ -20,6 +20,7 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
     private Point size;
     private Player player;
+    private float realRadius;
 
     private GameView canvas;
 
@@ -44,12 +45,34 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
             this.pos[0] = x;
             this.pos[1] = y;
         }
+
+        public void movX(float movX) {
+            float fX = this.pos[0] + movX;
+
+            if (fX >= realRadius && fX <= size.x - realRadius)
+                this.pos[0] += movX;
+            else if (fX < realRadius)
+                this.pos[0] = realRadius;
+            else
+                this.pos[0] = size.x - realRadius;
+        }
+
+        public void movY(float movY) {
+            float fY = this.pos[1] + movY;
+
+            if (fY >= realRadius && fY <= size.y - realRadius)
+                this.pos[1] += movY;
+            else if (fY < realRadius)
+                this.pos[1] = realRadius;
+            else
+                this.pos[1] = size.y - realRadius;
+        }
     }
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
+        
         this.size = new Point();
         this.accelerations = new float[2];
         this.lastUpdateTime = System.currentTimeMillis();
@@ -60,9 +83,11 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
         getWindowManager().getDefaultDisplay().getSize(this.size);
 
+        this.realRadius = this.size.x * PLAYER_SCALE;
+
         float speed = this.size.x / 1920 * SPEED;
-        float startX = this.size.x * (0.5f - PLAYER_SCALE);
-        float startY = this.size.y / 2 - PLAYER_SCALE * this.size.x;
+        float startX = this.size.x / 2 - this.realRadius;
+        float startY = this.size.y / 2 - this.realRadius;
 
         this.player = new Player(PLAYER_SCALE, startX, startY, speed);
 
@@ -81,8 +106,11 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         this.timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                player.pos[0] += player.speed * accelerations[1];
-                player.pos[1] += player.speed * accelerations[0];
+                float mov = player.speed * accelerations[1];
+                player.movX(mov);
+
+                mov = player.speed * accelerations[0];
+                player.movY(mov);
 
                 handler.sendEmptyMessage(0);
             }
@@ -121,15 +149,14 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
             setFocusable(true);
 
             this.pen = new Paint();
+            this.pen.setTextSize(50f);
+            this.pen.setAntiAlias(true);
+            this.pen.setStyle(Paint.Style.FILL);
         }
 
         @Override
         protected void onDraw(Canvas screen) {
-            this.pen.setStyle(Paint.Style.FILL);
-            this.pen.setAntiAlias(true);
-            this.pen.setTextSize(50f);
-
-            screen.drawCircle(player.pos[0], player.pos[1], player.scale * size.x, this.pen);
+            screen.drawCircle(player.pos[0], player.pos[1], realRadius, this.pen);
         }
     }
 }
