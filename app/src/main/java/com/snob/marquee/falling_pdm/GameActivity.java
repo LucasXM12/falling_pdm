@@ -12,31 +12,42 @@ import java.util.*;
 
 public class GameActivity extends AppCompatActivity implements SensorEventListener {
 
-    private final float SPEED = 20;
+    private final float SPEED = 15;
+    private final int PLAYER_RADIUS = 150;
 
-    private int circleRadius = 150;
-    private float circleX;
-    private float circleY;
+    private Player player;
 
     private GameView canvas;
 
     private Timer timer;
     private Handler handler;
 
-    private SensorManager sensorManager;
     private Sensor accelerometer;
+    private SensorManager sensorManager;
 
-    private float sX;
-    private float sY;
-    private float sZ;
+    private long lastUpdateTime;
+    private float[] accelerations;
 
-    private long lastSensorUpdateTime;
+    private class Player {
+        public int radius;
+        public float speed;
+        public float[] pos = new float[2];
+
+        public Player(@IntRange(from = 1) int radius, float x, float y, float speed) {
+            this.radius = radius;
+            this.speed = speed;
+
+            this.pos[0] = x;
+            this.pos[1] = y;
+        }
+    }
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        this.lastSensorUpdateTime = 0;
+        this.lastUpdateTime = System.currentTimeMillis();
+        this.accelerations = new float[2];
 
         this.sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         this.accelerometer = this.sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -49,8 +60,7 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         int screenW = size.x;
         int screenH = size.y;
 
-        this.circleX = screenW / 2 - this.circleRadius;
-        this.circleY = screenH / 2 - this.circleRadius;
+        this.player = new Player(PLAYER_RADIUS, screenW / 2 - PLAYER_RADIUS, screenH / 2 - PLAYER_RADIUS, SPEED);
 
         this.canvas = new GameView(GameActivity.this);
         setContentView(this.canvas);
@@ -67,12 +77,12 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         this.timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                circleX += SPEED * sY;
-                circleY += SPEED * sX;
+                player.pos[0] += player.speed * accelerations[1];
+                player.pos[1] += player.speed * accelerations[0];
 
                 handler.sendEmptyMessage(0);
             }
-        }, 0, 75);
+        }, 0, 60);
     }
 
     @Override
@@ -82,12 +92,11 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         if (eventSensor.getType() == Sensor.TYPE_ACCELEROMETER) {
             long currentTime = System.currentTimeMillis();
 
-            if (currentTime - this.lastSensorUpdateTime >= 25) {
-                this.lastSensorUpdateTime = currentTime;
+            if (currentTime - this.lastUpdateTime >= 20) {
+                this.lastUpdateTime = currentTime;
 
-                this.sX = event.values[0];
-                this.sY = event.values[1];
-                this.sZ = event.values[2];
+                this.accelerations[0] = event.values[0];
+                this.accelerations[1] = event.values[1];
             }
         }
     }
@@ -113,7 +122,7 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
             this.pen.setAntiAlias(true);
             this.pen.setTextSize(30f);
 
-            screen.drawCircle(circleX, circleY, circleRadius, this.pen);
+            screen.drawCircle(player.pos[0], player.pos[1], player.radius, this.pen);
         }
     }
 }
