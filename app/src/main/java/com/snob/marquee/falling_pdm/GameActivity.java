@@ -12,11 +12,16 @@ import java.util.*;
 
 public class GameActivity extends AppCompatActivity implements SensorEventListener {
 
+    private String debugStr;
+
     private final float SPEED = 20;
-    private final float PLAYER_SCALE = 0.075f;
+    private final float PLAYER_SCALE = 0.065f;
 
     private final long SENSOR_RATE = 20;
     private final long TIMER_PERIOD = 60;
+
+    private final float RECT_INC_RATE = 0.01f;
+    private final float RECT_MAX_SCALE = 0.90f;
 
     private Point size;
     private Player player;
@@ -32,6 +37,12 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
     private long lastUpdateTime;
     private float[] accelerations;
+
+    private float rectScale;
+    private float[] maxRectPoints;
+
+    private float[] offSetX;
+    private float[] offSetY;
 
     private class Player {
         public float scale;
@@ -49,31 +60,34 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         public void movX(float movX) {
             float fX = this.pos[0] + movX;
 
-            if (fX >= realRadius && fX <= size.x - realRadius)
+            if (fX >= offSetX[0] && fX <= offSetX[1])
                 this.pos[0] += movX;
-            else if (fX < realRadius)
-                this.pos[0] = realRadius;
+            else if (fX < offSetX[0])
+                this.pos[0] = offSetX[0];
             else
-                this.pos[0] = size.x - realRadius;
+                this.pos[0] = offSetX[1];
         }
 
         public void movY(float movY) {
             float fY = this.pos[1] + movY;
 
-            if (fY >= realRadius && fY <= size.y - realRadius)
+            if (fY >= offSetY[0] && fY <= offSetY[1])
                 this.pos[1] += movY;
-            else if (fY < realRadius)
-                this.pos[1] = realRadius;
+            else if (fY < offSetY[0])
+                this.pos[1] = offSetY[0];
             else
-                this.pos[1] = size.y - realRadius;
+                this.pos[1] = offSetY[1];
         }
     }
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
+
+        this.rectScale = 0;
         this.size = new Point();
+        this.offSetX = new float[2];
+        this.offSetY = new float[2];
         this.accelerations = new float[2];
         this.lastUpdateTime = System.currentTimeMillis();
 
@@ -83,7 +97,15 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
         getWindowManager().getDefaultDisplay().getSize(this.size);
 
+        this.maxRectPoints = calcRectPoints(RECT_MAX_SCALE);
+
         this.realRadius = this.size.x * PLAYER_SCALE;
+
+        this.offSetX[0] = this.maxRectPoints[0] + this.realRadius;
+        this.offSetX[1] = this.maxRectPoints[2] - this.realRadius;
+
+        this.offSetY[0] = this.maxRectPoints[1] + this.realRadius;
+        this.offSetY[1] = this.maxRectPoints[3] - this.realRadius;
 
         float speed = this.size.x / 1920 * SPEED;
         float startX = this.size.x / 2 - this.realRadius;
@@ -111,6 +133,10 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
                 mov = player.speed * accelerations[0];
                 player.movY(mov);
+
+                rectScale += RECT_INC_RATE;
+                if (rectScale >= RECT_MAX_SCALE)
+                    rectScale = 0;
 
                 handler.sendEmptyMessage(0);
             }
@@ -140,6 +166,17 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
     }
 
+    public float[] calcRectPoints(float scale) {
+        float[] ret = new float[4];
+        ret[0] = (size.x - size.x * scale) / 2;
+        ret[1] = (size.y - size.y * scale) / 2;
+
+        ret[2] = (size.x + size.x * scale) / 2;
+        ret[3] = (size.y + size.y * scale) / 2;
+
+        return ret;
+    }
+
     private class GameView extends View {
 
         private Paint pen;
@@ -156,6 +193,13 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
         @Override
         protected void onDraw(Canvas screen) {
+            //screen.drawText(debugStr, size.x / 2, size.y / 2, this.pen);
+
+            this.pen.setARGB(255, 0, 0, 0);
+            float[] coords = calcRectPoints(rectScale);
+            screen.drawRect(coords[0], coords[1], coords[2], coords[3], this.pen);
+
+            this.pen.setARGB(255, 0, 0, 255);
             screen.drawCircle(player.pos[0], player.pos[1], realRadius, this.pen);
         }
     }
