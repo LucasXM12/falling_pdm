@@ -1,70 +1,119 @@
 package com.snob.marquee.falling_pdm;
 
 import android.os.*;
-import android.app.*;
-import android.widget.*;
+import android.view.*;
 import android.content.*;
 import android.hardware.*;
+import android.graphics.*;
+import android.support.v7.app.*;
+import android.support.annotation.*;
 
-public class GameActivity extends Activity implements SensorEventListener {
+import java.util.*;
 
-    private sGame content;
+public class GameActivity extends AppCompatActivity implements SensorEventListener {
 
-    private SensorManager mSensorManager;
+    private final float SPEED = 20;
 
-    private final float[] mMagnetometerReading = new float[3];
-    private final float[] mAccelerometerReading = new float[3];
+    private int circleRadius = 150;
+    private float circleX;
+    private float circleY;
 
-    private final float[] mRotationMatrix = new float[9];
-    private final float[] mOrientationAngles = new float[3];
+    private GameView canvas;
+
+    private Timer timer;
+    private Handler handler;
+
+    private SensorManager sensorManager;
+    private Sensor accelerometer;
+
+    private float sX;
+    private float sY;
+    private float sZ;
+
+    private long lastSensorUpdateTime;
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
+    public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        this.content = new sGame(this, null);
-        setContentView(this.content);
+        this.lastSensorUpdateTime = 0;
 
+        this.sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        this.accelerometer = this.sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        this.sensorManager.registerListener(this, this.accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+
+        Display display = getWindowManager().getDefaultDisplay();
+        Point size = new Point();
+        display.getSize(size);
+
+        int screenW = size.x;
+        int screenH = size.y;
+
+        this.circleX = screenW / 2 - this.circleRadius;
+        this.circleY = screenH / 2 - this.circleRadius;
+
+        this.canvas = new GameView(GameActivity.this);
+        setContentView(this.canvas);
         getWindow().getDecorView().setSystemUiVisibility(StartActivity.UI_OPTIONS);
 
-        this.mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-    }
+        this.handler = new Handler() {
+            @Override
+            public void handleMessage(Message msg) {
+                canvas.invalidate();
+            }
+        };
 
-    @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+        this.timer = new Timer();
+        this.timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                circleX += SPEED * sY;
+                circleY += SPEED * sX;
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-
-        this.mSensorManager.registerListener(this, this.mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
-                SensorManager.SENSOR_DELAY_NORMAL, SensorManager.SENSOR_DELAY_UI);
-
-        this.mSensorManager.registerListener(this, this.mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD),
-                SensorManager.SENSOR_DELAY_NORMAL, SensorManager.SENSOR_DELAY_UI);
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-
-        this.mSensorManager.unregisterListener(this);
+                handler.sendEmptyMessage(0);
+            }
+        }, 0, 75);
     }
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.equals(this.mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)))
-            System.arraycopy(event.values, 0, this.mAccelerometerReading, 0, this.mAccelerometerReading.length);
+        Sensor eventSensor = event.sensor;
 
-        else if (event.sensor.equals(this.mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)))
-            System.arraycopy(event.values, 0, this.mMagnetometerReading, 0, this.mMagnetometerReading.length);
+        if (eventSensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            long currentTime = System.currentTimeMillis();
 
-        updateOrientationAngles();
-        this.content.setAngles(this.mOrientationAngles);
+            if (currentTime - this.lastSensorUpdateTime >= 25) {
+                this.lastSensorUpdateTime = currentTime;
+
+                this.sX = event.values[0];
+                this.sY = event.values[1];
+                this.sZ = event.values[2];
+            }
+        }
     }
 
-    public void updateOrientationAngles() {
-        this.mSensorManager.getRotationMatrix(this.mRotationMatrix, null, this.mAccelerometerReading, this.mMagnetometerReading);
-        this.mSensorManager.getOrientation(this.mRotationMatrix, this.mOrientationAngles);
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    }
+
+    private class GameView extends View {
+
+        private Paint pen;
+
+        public GameView(Context context) {
+            super(context);
+            setFocusable(true);
+
+            this.pen = new Paint();
+        }
+
+        @Override
+        protected void onDraw(Canvas screen) {
+            this.pen.setStyle(Paint.Style.FILL);
+            this.pen.setAntiAlias(true);
+            this.pen.setTextSize(30f);
+
+            screen.drawCircle(circleX, circleY, circleRadius, this.pen);
+        }
     }
 }
