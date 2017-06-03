@@ -12,9 +12,13 @@ import java.util.*;
 
 public class GameActivity extends AppCompatActivity implements SensorEventListener {
 
-    private final float SPEED = 15;
-    private final int PLAYER_RADIUS = 150;
+    private final float SPEED = 20;
+    private final float PLAYER_SCALE = 0.075f;
 
+    private final long SENSOR_RATE = 20;
+    private final long TIMER_PERIOD = 60;
+
+    private Point size;
     private Player player;
 
     private GameView canvas;
@@ -29,12 +33,12 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
     private float[] accelerations;
 
     private class Player {
-        public int radius;
+        public float scale;
         public float speed;
         public float[] pos = new float[2];
 
-        public Player(@IntRange(from = 1) int radius, float x, float y, float speed) {
-            this.radius = radius;
+        public Player(@FloatRange(from = 0) float scale, float x, float y, float speed) {
+            this.scale = scale;
             this.speed = speed;
 
             this.pos[0] = x;
@@ -46,21 +50,21 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        this.lastUpdateTime = System.currentTimeMillis();
+        this.size = new Point();
         this.accelerations = new float[2];
+        this.lastUpdateTime = System.currentTimeMillis();
 
         this.sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         this.accelerometer = this.sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         this.sensorManager.registerListener(this, this.accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
 
-        Display display = getWindowManager().getDefaultDisplay();
-        Point size = new Point();
-        display.getSize(size);
+        getWindowManager().getDefaultDisplay().getSize(this.size);
 
-        int screenW = size.x;
-        int screenH = size.y;
+        float speed = this.size.x / 1920 * SPEED;
+        float startX = this.size.x * (0.5f - PLAYER_SCALE);
+        float startY = this.size.y / 2 - PLAYER_SCALE * this.size.x;
 
-        this.player = new Player(PLAYER_RADIUS, screenW / 2 - PLAYER_RADIUS, screenH / 2 - PLAYER_RADIUS, SPEED);
+        this.player = new Player(PLAYER_SCALE, startX, startY, speed);
 
         this.canvas = new GameView(GameActivity.this);
         setContentView(this.canvas);
@@ -82,7 +86,7 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
                 handler.sendEmptyMessage(0);
             }
-        }, 0, 60);
+        }, 0, TIMER_PERIOD);
     }
 
     @Override
@@ -92,11 +96,14 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         if (eventSensor.getType() == Sensor.TYPE_ACCELEROMETER) {
             long currentTime = System.currentTimeMillis();
 
-            if (currentTime - this.lastUpdateTime >= 20) {
+            if (currentTime - this.lastUpdateTime >= SENSOR_RATE) {
                 this.lastUpdateTime = currentTime;
 
-                this.accelerations[0] = event.values[0];
-                this.accelerations[1] = event.values[1];
+                float aX = event.values[0];
+                float aY = event.values[1];
+
+                this.accelerations[0] = Math.min(Math.abs(aX), 10) * Math.signum(aX);
+                this.accelerations[1] = Math.min(Math.abs(aY), 10) * Math.signum(aY);
             }
         }
     }
@@ -120,9 +127,9 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         protected void onDraw(Canvas screen) {
             this.pen.setStyle(Paint.Style.FILL);
             this.pen.setAntiAlias(true);
-            this.pen.setTextSize(30f);
+            this.pen.setTextSize(50f);
 
-            screen.drawCircle(player.pos[0], player.pos[1], player.radius, this.pen);
+            screen.drawCircle(player.pos[0], player.pos[1], player.scale * size.x, this.pen);
         }
     }
 }
