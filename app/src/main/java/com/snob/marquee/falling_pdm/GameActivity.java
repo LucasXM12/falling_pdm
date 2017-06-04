@@ -60,35 +60,35 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
     private boolean[][] floorMatrix; //Indica a posição de cada furo no piso
 
     private class Player {
-        public float scale;
         public float speed;
-        public float[] pos = new float[2];
+        public final float[] pos = new float[2];
 
-        public Player(@FloatRange(from = 0) float scale, float x, float y, float speed) {
-            this.scale = scale;
+        public Player(float x, float y, float speed) {
             this.speed = speed;
 
             this.pos[0] = x;
             this.pos[1] = y;
         }
 
-        public void movX(float movX) {
-            float fX = this.pos[0] + movX;
+        public void movX(float accelX) {
+            float deltaX = this.speed * accelX;
+            float futureX = this.pos[0] + deltaX;
 
-            if (fX >= offSetX[0] && fX <= offSetX[1])
-                this.pos[0] += movX;
-            else if (fX < offSetX[0])
+            if (futureX >= offSetX[0] && futureX <= offSetX[1])
+                this.pos[0] += deltaX;
+            else if (futureX < offSetX[0])
                 this.pos[0] = offSetX[0];
             else
                 this.pos[0] = offSetX[1];
         }
 
-        public void movY(float movY) {
-            float fY = this.pos[1] + movY;
+        public void movY(float accelY) {
+            float deltaY = this.speed * accelY;
+            float futureY = this.pos[1] + deltaY;
 
-            if (fY >= offSetY[0] && fY <= offSetY[1])
-                this.pos[1] += movY;
-            else if (fY < offSetY[0])
+            if (futureY >= offSetY[0] && futureY <= offSetY[1])
+                this.pos[1] += deltaY;
+            else if (futureY < offSetY[0])
                 this.pos[1] = offSetY[0];
             else
                 this.pos[1] = offSetY[1];
@@ -134,7 +134,7 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         float startX = this.screenSize.x / 2 - this.realRadius;
         float startY = this.screenSize.y / 2 - this.realRadius;
 
-        this.player = new Player(PLAYER_SCALE, startX, startY, speed);
+        this.player = new Player(startX, startY, speed);
 
         this.canvas = new GameView(GameActivity.this);
         setContentView(this.canvas);
@@ -151,11 +151,8 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         this.timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                float mov = player.speed * accels[1];
-                player.movX(mov);
-
-                mov = player.speed * accels[0];
-                player.movY(mov);
+                player.movX(accels[1]);
+                player.movY(accels[0]);
 
                 synchronized (floorMatrix) {
                     rectScale += SCALE_INC_RATE;
