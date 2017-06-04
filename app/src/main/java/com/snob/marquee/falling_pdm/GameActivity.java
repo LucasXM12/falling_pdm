@@ -12,46 +12,52 @@ import java.util.*;
 
 public class GameActivity extends AppCompatActivity implements SensorEventListener {
 
-    private String debugStr;
-
+    //Constantes: __________________________________________________________________________________
+    //De jogador:
     private final float SPEED = 20;
     private final float PLAYER_SCALE = 0.025f;
 
+    //De tempo:
     private final long SENSOR_RATE = 20;
     private final long TIMER_PERIOD = 60;
 
-    private final float RECT_INC_RATE = 0.03f;
+    //De piso:
+    private final float SCALE_INC_RATE = 0.03f;
     private final float RECT_MAX_SCALE = 0.80f;
 
-    private final int MAX_HOLES = 5;
+    //Variáveis: ___________________________________________________________________________________
+    private Point screenSize; //Tamanho da tela (largura, altura)
 
-    private Random numberGen;
+    private Player player; //Objeto do jogador
+    private float realRadius; //Raio real do jogador calculado a partir da tela e escala do jogador
 
-    private Point size;
-    private Player player;
-    private float realRadius;
+    private GameView canvas; //View onde o jogo é desenhado
 
-    private GameView canvas;
-
-    private Timer timer;
-    private Handler handler;
+    private Timer timer; //Temporizador que atualiza os objs do jogo
+    private Handler handler; //Trata as mensagens disparadas pelo timer
 
     private Sensor accelerometer;
     private SensorManager sensorManager;
 
-    private long lastUpdateTime;
-    private float[] accelerations;
+    private float[] accels; //Medições feitas pelo sensor (x, y)
+    private long lastUpdate; //Horário da última atualização do sensor
 
-    private float rectScale;
-    private float[] maxRectPoints;
+    private Random numberGen; //Gerador de números aleatórios
 
-    private float[] offSetX;
-    private float[] offSetY;
+    private float[] maxRectPoints; //Pontos do piso com escala máxima
 
-    private int rowsNum;
-    private int numHoles;
-    private ArrayList<Float> holes;
-    private boolean[][] floorMatrix;
+    private int gridRes; //Número de partições em x e y no piso
+
+    private float[] offSetX; //Xs limitadores no movimento do jogador
+    private float[] offSetY; //Ys limitadores no movimento do jogador
+
+    private float rectScale; //Escala atual do piso
+
+    private int maxHoles; //Número máximo de furos em cada piso
+    private int numHoles; //Número de furos no piso atual
+
+    private ArrayList<Float> holes; //Coordenadas de cada furo no piso
+    private boolean[][] floorMatrix; //Indica a posição de cada furo no piso
 
     private class Player {
         public float scale;
@@ -94,26 +100,28 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         super.onCreate(savedInstanceState);
 
         this.rectScale = 0;
-        this.size = new Point();
+        this.screenSize = new Point();
         this.offSetX = new float[2];
         this.offSetY = new float[2];
         this.numberGen = new Random();
         this.holes = new ArrayList<>();
-        this.accelerations = new float[2];
-        this.lastUpdateTime = System.currentTimeMillis();
+        this.accels = new float[2];
+        this.lastUpdate = System.currentTimeMillis();
 
         this.sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         this.accelerometer = this.sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         this.sensorManager.registerListener(this, this.accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
 
-        getWindowManager().getDefaultDisplay().getSize(this.size);
+        getWindowManager().getDefaultDisplay().getSize(this.screenSize);
 
         this.maxRectPoints = calcRectPoints(RECT_MAX_SCALE);
 
-        this.realRadius = this.size.x * PLAYER_SCALE;
+        this.realRadius = this.screenSize.x * PLAYER_SCALE;
 
-        this.rowsNum = Math.round(RECT_MAX_SCALE * this.size.y / 3 / this.realRadius);
-        this.floorMatrix = new boolean[this.rowsNum][this.rowsNum];
+        this.gridRes = Math.round(RECT_MAX_SCALE * this.screenSize.y / 3 / this.realRadius);
+        this.floorMatrix = new boolean[this.gridRes][this.gridRes];
+        this.maxHoles = this.gridRes * this.gridRes / 3;
+
         raffleMatrix();
 
         this.offSetX[0] = this.maxRectPoints[0] + this.realRadius;
@@ -122,9 +130,9 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         this.offSetY[0] = this.maxRectPoints[1] + this.realRadius;
         this.offSetY[1] = this.maxRectPoints[3] - this.realRadius;
 
-        float speed = this.size.x / 1920 * SPEED;
-        float startX = this.size.x / 2 - this.realRadius;
-        float startY = this.size.y / 2 - this.realRadius;
+        float speed = this.screenSize.x / 1920 * SPEED;
+        float startX = this.screenSize.x / 2 - this.realRadius;
+        float startY = this.screenSize.y / 2 - this.realRadius;
 
         this.player = new Player(PLAYER_SCALE, startX, startY, speed);
 
@@ -143,14 +151,14 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         this.timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                float mov = player.speed * accelerations[1];
+                float mov = player.speed * accels[1];
                 player.movX(mov);
 
-                mov = player.speed * accelerations[0];
+                mov = player.speed * accels[0];
                 player.movY(mov);
 
                 synchronized (floorMatrix) {
-                    rectScale += RECT_INC_RATE;
+                    rectScale += SCALE_INC_RATE;
 
                     if (rectScale >= RECT_MAX_SCALE) {
                         rectScale = 0;
@@ -170,14 +178,14 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         if (eventSensor.getType() == Sensor.TYPE_ACCELEROMETER) {
             long currentTime = System.currentTimeMillis();
 
-            if (currentTime - this.lastUpdateTime >= SENSOR_RATE) {
-                this.lastUpdateTime = currentTime;
+            if (currentTime - this.lastUpdate >= SENSOR_RATE) {
+                this.lastUpdate = currentTime;
 
                 float aX = event.values[0];
                 float aY = event.values[1];
 
-                this.accelerations[0] = Math.min(Math.abs(aX), 10) * Math.signum(aX);
-                this.accelerations[1] = Math.min(Math.abs(aY), 10) * Math.signum(aY);
+                this.accels[0] = Math.min(Math.abs(aX), 10) * Math.signum(aX);
+                this.accels[1] = Math.min(Math.abs(aY), 10) * Math.signum(aY);
             }
         }
     }
@@ -188,23 +196,23 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
     public float[] calcRectPoints(float scale) {
         float[] ret = new float[4];
-        ret[0] = (size.x - size.x * scale) / 2;
-        ret[1] = (size.y - size.y * scale) / 2;
+        ret[0] = (screenSize.x - screenSize.x * scale) / 2;
+        ret[1] = (screenSize.y - screenSize.y * scale) / 2;
 
-        ret[2] = (size.x + size.x * scale) / 2;
-        ret[3] = (size.y + size.y * scale) / 2;
+        ret[2] = (screenSize.x + screenSize.x * scale) / 2;
+        ret[3] = (screenSize.y + screenSize.y * scale) / 2;
 
         return ret;
     }
 
     public void raffleMatrix() {
-        this.floorMatrix = new boolean[this.rowsNum][this.rowsNum];
+        this.floorMatrix = new boolean[this.gridRes][this.gridRes];
 
-        this.numHoles = 1 + this.numberGen.nextInt(MAX_HOLES);
+        this.numHoles = 1 + this.numberGen.nextInt(maxHoles);
 
         for (int c = 0; c < this.numHoles; c++) {
-            int i = this.numberGen.nextInt(this.rowsNum);
-            int j = this.numberGen.nextInt(this.rowsNum);
+            int i = this.numberGen.nextInt(this.gridRes);
+            int j = this.numberGen.nextInt(this.gridRes);
 
             this.floorMatrix[i][j] = true;
         }
@@ -217,11 +225,11 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         int added = 0;
 
         synchronized (this.floorMatrix) {
-            for (int i = 0; i < this.rowsNum; i++)
-                for (int j = 0; j < this.rowsNum; j++)
+            for (int i = 0; i < this.gridRes; i++)
+                for (int j = 0; j < this.gridRes; j++)
                     if (this.floorMatrix[i][j]) {
-                        holesW = this.size.x * this.rectScale / this.rowsNum;
-                        holesH = this.size.y * this.rectScale / this.rowsNum;
+                        holesW = this.screenSize.x * this.rectScale / this.gridRes;
+                        holesH = this.screenSize.y * this.rectScale / this.gridRes;
 
                         a = x + i * holesW;
                         b = y + j * holesH;
@@ -253,7 +261,7 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
         @Override
         protected void onDraw(Canvas screen) {
-            //screen.drawText(debugStr, size.x / 2, size.y / 2, this.pen);
+            //screen.drawText(debugStr, screenSize.x / 2, screenSize.y / 2, this.pen);
 
             this.pen.setARGB(255, 0, 0, 0);
             float[] floor = calcRectPoints(rectScale);
