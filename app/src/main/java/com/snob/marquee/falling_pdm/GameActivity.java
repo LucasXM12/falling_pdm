@@ -14,8 +14,9 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
     //Constantes: __________________________________________________________________________________
     //De jogador:
-    private final float SPEED = 20;
-    private final float PLAYER_SCALE = 0.025f;
+    private final int DIFFICULT = 5;
+    private final float PLYR_SPEED = 20;
+    private final float PLAYER_SCALE = 0.03f;
 
     //De tempo:
     private final long SENSOR_RATE = 20;
@@ -25,8 +26,12 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
     private final float SCALE_INC_RATE = 0.03f;
     private final float RECT_MAX_SCALE = 0.80f;
 
+    private final int GRID_RES = 5; //Número de partições em x e y no piso
+
+    private final Random NUMBER_GEN = new Random(System.currentTimeMillis()); //Gerador de números
+
     //Variáveis: ___________________________________________________________________________________
-    private Point screenSize; //Tamanho da tela (largura, altura)
+    private final Point screenSize = new Point(); //Tamanho da tela (largura, altura)
 
     private Player player; //Objeto do jogador
     private float realRadius; //Raio real do jogador calculado a partir da tela e escala do jogador
@@ -39,102 +44,49 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
     private Sensor accelerometer;
     private SensorManager sensorManager;
 
-    private float[] accels; //Medições feitas pelo sensor (x, y)
     private long lastUpdate; //Horário da última atualização do sensor
+    private final float[] accels = new float[2]; //Medições feitas pelo sensor (x, y)
 
-    private Random numberGen; //Gerador de números aleatórios
-
-    private float[] maxRectPoints; //Pontos do piso com escala máxima
-
-    private int gridRes; //Número de partições em x e y no piso
-
-    private float[] offSetX; //Xs limitadores no movimento do jogador
-    private float[] offSetY; //Ys limitadores no movimento do jogador
-
-    private float rectScale; //Escala atual do piso
+    private float rectScale = 0; //Escala atual do piso
 
     private int maxHoles; //Número máximo de furos em cada piso
     private int numHoles; //Número de furos no piso atual
 
-    private ArrayList<Float> holes; //Coordenadas de cada furo no piso
     private boolean[][] floorMatrix; //Indica a posição de cada furo no piso
-
-    private class Player {
-        public float speed;
-        public final float[] pos = new float[2];
-
-        public Player(float x, float y, float speed) {
-            this.speed = speed;
-
-            this.pos[0] = x;
-            this.pos[1] = y;
-        }
-
-        public void movX(float accelX) {
-            float deltaX = this.speed * accelX;
-            float futureX = this.pos[0] + deltaX;
-
-            if (futureX >= offSetX[0] && futureX <= offSetX[1])
-                this.pos[0] += deltaX;
-            else if (futureX < offSetX[0])
-                this.pos[0] = offSetX[0];
-            else
-                this.pos[0] = offSetX[1];
-        }
-
-        public void movY(float accelY) {
-            float deltaY = this.speed * accelY;
-            float futureY = this.pos[1] + deltaY;
-
-            if (futureY >= offSetY[0] && futureY <= offSetY[1])
-                this.pos[1] += deltaY;
-            else if (futureY < offSetY[0])
-                this.pos[1] = offSetY[0];
-            else
-                this.pos[1] = offSetY[1];
-        }
-    }
+    private final ArrayList<Float> holes = new ArrayList<>(); //Coordenadas de cada furo no piso
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        this.rectScale = 0;
-        this.screenSize = new Point();
-        this.offSetX = new float[2];
-        this.offSetY = new float[2];
-        this.numberGen = new Random();
-        this.holes = new ArrayList<>();
-        this.accels = new float[2];
         this.lastUpdate = System.currentTimeMillis();
 
         this.sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         this.accelerometer = this.sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        this.sensorManager.registerListener(this, this.accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        this.sensorManager.registerListener(this, this.accelerometer,
+                SensorManager.SENSOR_DELAY_GAME);
 
         getWindowManager().getDefaultDisplay().getSize(this.screenSize);
 
-        this.maxRectPoints = calcRectPoints(RECT_MAX_SCALE);
+        this.realRadius = PLAYER_SCALE * this.screenSize.x;
 
-        this.realRadius = this.screenSize.x * PLAYER_SCALE;
-
-        this.gridRes = Math.round(RECT_MAX_SCALE * this.screenSize.y / 3 / this.realRadius);
-        this.floorMatrix = new boolean[this.gridRes][this.gridRes];
-        this.maxHoles = this.gridRes * this.gridRes / 3;
+        this.floorMatrix = new boolean[GRID_RES][GRID_RES];
+        this.maxHoles = (int) Math.round(Math.ceil(GRID_RES * GRID_RES / (double) DIFFICULT));
 
         raffleMatrix();
 
-        this.offSetX[0] = this.maxRectPoints[0] + this.realRadius;
-        this.offSetX[1] = this.maxRectPoints[2] - this.realRadius;
-
-        this.offSetY[0] = this.maxRectPoints[1] + this.realRadius;
-        this.offSetY[1] = this.maxRectPoints[3] - this.realRadius;
-
-        float speed = this.screenSize.x / 1920 * SPEED;
+        float speed = this.screenSize.x / 1920 * PLYR_SPEED;
         float startX = this.screenSize.x / 2 - this.realRadius;
         float startY = this.screenSize.y / 2 - this.realRadius;
 
-        this.player = new Player(startX, startY, speed);
+        float[] maxRectPoints = calcRectPoints(RECT_MAX_SCALE);
+        maxRectPoints[0] += this.realRadius;
+        maxRectPoints[2] -= this.realRadius;
+
+        maxRectPoints[1] += this.realRadius;
+        maxRectPoints[3] -= this.realRadius;
+
+        this.player = new Player(startX, startY, speed, maxRectPoints);
 
         this.canvas = new GameView(GameActivity.this);
         setContentView(this.canvas);
@@ -181,8 +133,8 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
                 float aX = event.values[0];
                 float aY = event.values[1];
 
-                this.accels[0] = Math.min(Math.abs(aX), 10) * Math.signum(aX);
-                this.accels[1] = Math.min(Math.abs(aY), 10) * Math.signum(aY);
+                this.accels[0] = Math.min(Math.abs(aX), SensorManager.STANDARD_GRAVITY) * Math.signum(aX);
+                this.accels[1] = Math.min(Math.abs(aY), SensorManager.STANDARD_GRAVITY) * Math.signum(aY);
             }
         }
     }
@@ -203,13 +155,13 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
     }
 
     public void raffleMatrix() {
-        this.floorMatrix = new boolean[this.gridRes][this.gridRes];
+        this.floorMatrix = new boolean[GRID_RES][GRID_RES];
 
-        this.numHoles = 1 + this.numberGen.nextInt(maxHoles);
+        this.numHoles = 1 + NUMBER_GEN.nextInt(maxHoles);
 
         for (int c = 0; c < this.numHoles; c++) {
-            int i = this.numberGen.nextInt(this.gridRes);
-            int j = this.numberGen.nextInt(this.gridRes);
+            int i = NUMBER_GEN.nextInt(GRID_RES);
+            int j = NUMBER_GEN.nextInt(GRID_RES);
 
             this.floorMatrix[i][j] = true;
         }
@@ -222,11 +174,11 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         int added = 0;
 
         synchronized (this.floorMatrix) {
-            for (int i = 0; i < this.gridRes; i++)
-                for (int j = 0; j < this.gridRes; j++)
+            for (int i = 0; i < GRID_RES; i++)
+                for (int j = 0; j < GRID_RES; j++)
                     if (this.floorMatrix[i][j]) {
-                        holesW = this.screenSize.x * this.rectScale / this.gridRes;
-                        holesH = this.screenSize.y * this.rectScale / this.gridRes;
+                        holesW = this.screenSize.x * this.rectScale / GRID_RES;
+                        holesH = this.screenSize.y * this.rectScale / GRID_RES;
 
                         a = x + i * holesW;
                         b = y + j * holesH;
