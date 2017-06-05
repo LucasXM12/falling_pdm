@@ -24,6 +24,7 @@ public class Player {
         this.offSetY[1] = maxRectPoints[3];
     }
 
+    //Move o jogador no eixo x tomando em conta o retângulo limitante (colisão com a parede):
     public void movX(float accelX) {
         float deltaX = this.speed * accelX;
         float futureX = this.pos[0] + deltaX;
@@ -36,6 +37,7 @@ public class Player {
             this.pos[0] = offSetX[1];
     }
 
+    //Move o jogador no eixo y tomando em conta o retângulo limitante (colisão com a parede):
     public void movY(float accelY) {
         float deltaY = this.speed * accelY;
         float futureY = this.pos[1] + deltaY;
