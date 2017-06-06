@@ -14,7 +14,7 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
     //Constantes: __________________________________________________________________________________
     //De jogador:
-    private final int DIFFICULT = 5;
+    private final int DIFFICULT = 8;
     private final float PLYR_SPEED = 20;
     private final float PLAYER_SCALE = 0.03f;
 
@@ -23,7 +23,6 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
     private final long TIMER_PERIOD = 60;
 
     //De piso:
-    private final float SCALE_INC_RATE = 0.03f;
     private final float RECT_MAX_SCALE = 0.80f;
 
     private final int GRID_RES = 5; //Número de partições em x e y no piso
@@ -55,6 +54,11 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
     private boolean[][] floorMatrix; //Indica a posição de cada furo no piso
     private final ArrayList<Float> holes = new ArrayList<>(); //Coordenadas de cada furo no piso
 
+    private Integer score = 0;
+    private boolean lost = false;
+
+    private float scaleIncRate = 0.01f; //Velocidade que o piso cresçe
+
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -73,7 +77,7 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
 
         this.floorMatrix = new boolean[GRID_RES][GRID_RES]; //Inicializa a matrix de piso
         this.maxHoles = (int) Math.round(Math.ceil(GRID_RES * GRID_RES / (double) DIFFICULT)); //Calcula o número máximo de furos
-                                                                                                //baseado na dificuldade
+        //baseado na dificuldade
 
         raffleMatrix(); //Sorteia os furos no piso
 
@@ -109,21 +113,45 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         this.timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                player.movX(accels[1]);
-                player.movY(accels[0]);
+                if (!lost) {
+                    player.movX(accels[1]);
+                    player.movY(accels[0]);
 
-                synchronized (floorMatrix) {
-                    rectScale += SCALE_INC_RATE;
+                    synchronized (floorMatrix) {
+                        rectScale += scaleIncRate;
 
-                    if (rectScale >= RECT_MAX_SCALE) {
-                        rectScale = 0;
-                        raffleMatrix();
+                        if (rectScale >= RECT_MAX_SCALE) {
+                            if (!crashed()) {
+                                score++;
+                                scaleIncRate += 0.0005f;
+                            } else
+                                lost = true;
+
+                            raffleMatrix();
+
+                            rectScale = 0;
+                        }
                     }
-                }
 
-                handler.sendEmptyMessage(0);
+                    handler.sendEmptyMessage(0);
+                }
             }
         }, 0, TIMER_PERIOD);
+    }
+
+    private boolean crashed() { //Verifica se o jogador bateu no piso:
+        float xP = player.pos[0], yP = player.pos[1]; //Salva o x e y do jogador
+
+        for (int c = 0; c < holes.size(); c += 4) {
+            float x1 = holes.get(c), y1 = holes.get(c + 1), //Salva as coordenadas do furo atual
+                    x2 = holes.get(c + 2), y2 = holes.get(c + 3);
+
+            if (xP >= x1 && xP <= x2)
+                if (yP >= y1 && yP <= y2)
+                    return false;
+        }
+
+        return true;
     }
 
     @Override
@@ -219,7 +247,7 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
             setFocusable(true);
 
             this.pen = new Paint();
-            this.pen.setTextSize(50f);
+            this.pen.setTextSize(100f);
             this.pen.setAntiAlias(true);
             this.pen.setStyle(Paint.Style.FILL);
         }
@@ -228,21 +256,31 @@ public class GameActivity extends AppCompatActivity implements SensorEventListen
         protected void onDraw(Canvas screen) {
             //screen.drawText(debugStr, screenSize.x / 2, screenSize.y / 2, this.pen);
 
-            //Desenha o piso (preto):
-            this.pen.setARGB(255, 0, 0, 0);
-            float[] floor = calcRectPoints(rectScale);
-            screen.drawRect(floor[0], floor[1], floor[2], floor[3], this.pen);
+            if (!lost) { //Verifica se ainda não perdeu o jogo:
+                //Desenha o piso (preto):
+                this.pen.setARGB(255, 0, 0, 0);
+                float[] floor = calcRectPoints(rectScale);
+                screen.drawRect(floor[0], floor[1], floor[2], floor[3], this.pen);
 
-            //Desenha os furos em branco em cima do piso:
-            this.pen.setARGB(255, 255, 255, 255);
+                //Desenha os furos em branco em cima do piso:
+                this.pen.setARGB(255, 255, 255, 255);
 
-            createRects(floor[0], floor[1]);
-            for (int c = 0; c < holes.size(); c += 4)
-                screen.drawRect(holes.get(c), holes.get(c + 1), holes.get(c + 2), holes.get(c + 3), this.pen);
+                createRects(floor[0], floor[1]);
+                for (int c = 0; c < holes.size(); c += 4)
+                    screen.drawRect(holes.get(c), holes.get(c + 1), holes.get(c + 2), holes.get(c + 3), this.pen);
 
-            //Desenha o jogador:
-            this.pen.setARGB(255, 0, 0, 255);
-            screen.drawCircle(player.pos[0], player.pos[1], realRadius, this.pen);
+                //Desenha o jogador:
+                this.pen.setARGB(255, 0, 0, 255);
+                screen.drawCircle(player.pos[0], player.pos[1], realRadius, this.pen);
+
+                //Escreve o score na tela:
+                this.pen.setARGB(255, 0, 255, 0);
+                screen.drawText(score.toString(), realRadius, 2 * realRadius, this.pen);
+            } else {
+                this.pen.setTextSize(100f * screenSize.x / 1920f);
+                this.pen.setARGB(255, 255, 0, 0);
+                screen.drawText("Você perdeu!!! Seu score foi: " + score, 5 * realRadius, screenSize.y / 2, this.pen);
+            }
         }
     }
 }
